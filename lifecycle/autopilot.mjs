@@ -80,7 +80,7 @@ if (raw.length && !(P.review.vote && n > 1)) {
   });
 } else if (raw.length) {
   const list = raw.map((f, i) => `${i}. [${f.file}] ${f.problem}: ${f.why}`).join('\n');
-  const judge = 'You verify review findings. For each numbered finding, vote true only if it is a real problem in this diff. Return one boolean per finding, in order.';
+  const judge = 'You verify review findings. For each numbered finding, vote true only if it is a real problem in this diff and not a repeat of an earlier finding in the list (several reviewers often report the same bug). Return one boolean per finding, in order.';
   const ballots = await Promise.all(Array.from({ length: n }, () => ask(judge, `${context}\n\nFindings:\n${list}`, VOTES)));
   const kept = raw.filter((_, i) => ballots.filter((b) => b.votes[i]).length > n / 2);
   post((s, c) => {
