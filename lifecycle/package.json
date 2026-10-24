@@ -1,0 +1,14 @@
+{
+  "name": "lifecycle-board",
+  "private": true,
+  "type": "module",
+  "description": "Board, CLI and optional API autopilot for the Future Software Lifecycle blueprint",
+  "scripts": {
+    "board": "node server.mjs",
+    "demo": "node demo.mjs --dir .lifecycle-demo",
+    "test": "node test.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.137.0"
+  }
+}

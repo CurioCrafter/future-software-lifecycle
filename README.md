@@ -60,10 +60,83 @@ flowchart TD
     S4 --> W7["Work"] & W8["Work"]
 ```
 
+## The board: run the blueprint with Claude Code
+
+The blueprint is also a working tool. **Claude Code does the work through a CLI; you watch and decide in a live dashboard.** Every step it takes (tests run, findings, fixes, approvals, ramps) moves a card across the board in real time.
+
+![The board in motion: changes flow through verify, AI review, security, CI, human approval and a staged rollout](docs/media/board-in-motion.gif)
+
+*A simulated team of agents (`node lifecycle/demo.mjs`): a typo fix waits for the floor to be built before it can skip human review, a login change needs two human approvals, a coupon change hits the 3-round review limit and gets rethought, and a caching change is halted mid-ramp and rolled back.*
+
+### What each view is for
+
+| | |
+|---|---|
+| ![Pipeline](docs/media/pipeline.png) | **Pipeline.** Every change moves through the six layers. Each card shows its risk tier, the human who owns it, AI review rounds (red after 3) and the exact thing blocking it. The live feed on the right shows who did what. |
+| ![Approval](docs/media/approval-drawer.png) | **Human approval.** Click a card to see the real test output, every finding and how it was answered. Only a person in the GUI can approve: agent approvals are shown crossed out because they never count. |
+| ![Decision map](docs/media/decisions.png) | **Decision map.** Drag each kind of decision to the attention it needs: no human, on the loop, in the loop, or licensed signature. |
+| ![The floor](docs/media/floor.png) | **The floor.** The four planks. Until all four exist, every change needs at least one human, even tier 0. |
+| ![Metrics](docs/media/metrics.png) | **Metrics.** Output vs revert rate (the guardrail) and how often the AI reviewer catches your past incidents. |
+| ![Org](docs/media/org.png) | **Org.** The end-state org chart. Nodes light up as agents in each role act; people hold purpose, trust and accountability. |
+
+### Quick start
+
+Needs [Node.js](https://nodejs.org) 18 or newer. The board and CLI have no dependencies.
+
+```bash
+git clone https://github.com/CurioCrafter/future-software-lifecycle
+cd future-software-lifecycle
+node lifecycle/server.mjs --dir .lifecycle-demo
+```
+
+Open http://localhost:4317, then in a second terminal watch a simulated team:
+
+```bash
+node lifecycle/demo.mjs --dir .lifecycle-demo
+```
+
+To use it on your own project, copy the `lifecycle/` folder and `.claude/skills/lifecycle/` into your repo, run `node lifecycle/cli.mjs init`, and start the server without `--dir`.
+
+### Two ways to drive it
+
+**1. Claude subscription (Claude Code, no extra cost).** The repo ships a Claude Code skill at [.claude/skills/lifecycle/SKILL.md](.claude/skills/lifecycle/SKILL.md). Claude Code picks it up automatically in this folder. You prompt each part and Claude does that stage, records it on the board, and stops:
+
+| You say | Claude does |
+|---|---|
+| "Open a lifecycle change for adding CSV export. I own it." | Writes the spec and acceptance criteria, picks the risk tier, opens card C1 |
+| "Build it and self-verify." | Makes the change, runs your tests through `cli.mjs evidence` so the real output is recorded |
+| "Run the AI review round." | Reviews the diff (or spawns reviewer subagents that vote), records findings, fixes or closes each |
+| "Security review and CI." | Records security findings (they block merge), runs your full check |
+| "What's blocking C1?" | Reads the board. At approval it tells you to click Approve in the GUI: it cannot approve for you |
+| "Ship it behind a flag and ramp." | Flags it, ramps 10% → 50% → 100%. You can halt the ramp from the GUI at any time |
+
+**2. Claude API (pay per token, automated).** [lifecycle/autopilot.mjs](lifecycle/autopilot.mjs) runs layers 2 and 3 on your own API key: several reviewers hunt for bugs in parallel, a separate voting pass keeps only the findings most of them agree on, and a security reviewer runs last. Results land on the board. It never approves and never merges.
+
+```bash
+cd lifecycle && npm install && cd ..
+export ANTHROPIC_API_KEY=sk-ant-...
+node lifecycle/autopilot.mjs C1 --base main --test "npm test"
+```
+
+Set `LIFECYCLE_MODEL=claude-sonnet-5-5` for a cheaper model (default `claude-opus-5-5`). Each round costs a few API calls per reviewer, so cost grows with diff size and `--reviewers`.
+
+### What the board enforces
+
+- Agent approvals never count. Human approvals only come from the GUI.
+- A change can't leave self-verify without a real, passing command run.
+- Every finding must be fixed or closed with a reason. Open security findings block merge.
+- After 3 AI review rounds, the change is blocked until the approach is rethought.
+- Tier 0 skips human review only when the floor is fully built and the author is trusted.
+- The merge queue re-checks every earlier gate before release.
+
+The board is a local process guard, not a security boundary: anything that can write `.lifecycle/state.json` can change it. Real enforcement belongs in branch protection and your CI. Use the board to run and see the process.
+
 ## What's in this repo
 
 | File | What it's for |
 |---|---|
+| [lifecycle/](lifecycle/) | The board: `server.mjs` (dashboard), `cli.mjs` (what Claude uses), `autopilot.mjs` (API mode), `demo.mjs`, `test.mjs`. |
+| [.claude/skills/lifecycle/SKILL.md](.claude/skills/lifecycle/SKILL.md) | The Claude Code skill that teaches Claude to run each stage through the CLI. |
 | [BLUEPRINT.md](BLUEPRINT.md) | The full playbook: the six verification layers, risk tiers, the two non-negotiable rules, the floor, and the org model. |
 | [templates/decision-map.md](templates/decision-map.md) | Map every decision to no human / on the loop / in the loop / licensed signature. |
 | [templates/readiness-checklist.md](templates/readiness-checklist.md) | Score your team before you loosen review. Start here. |
@@ -81,4 +154,6 @@ flowchart TD
 
 ## License
 
-[CC BY 4.0](LICENSE): copy, adapt and share, including commercially, as long as you credit this repo and David Shapiro's video.
+Docs and templates: [CC BY 4.0](LICENSE). Copy, adapt and share, including commercially, as long as you credit this repo and David Shapiro's video. Code in `lifecycle/`: [MIT](lifecycle/LICENSE).
+
+This is a community project. It is not made or endorsed by Anthropic or David Shapiro.
