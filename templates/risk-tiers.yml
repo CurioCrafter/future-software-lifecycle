@@ -1,0 +1,45 @@
+# Risk tiers: the change sets the tier, not the author.
+# Highest matching tier wins. Unmatched files default to tier 1.
+# Start strict; move paths down a tier only when revert/incident data supports it.
+
+default_tier: 1
+
+tiers:
+  0:
+    name: low-risk
+    human_approvals: 0          # after all automated checks pass
+    requires_trusted_author: true
+    paths:
+      - "**/*.md"
+      - "docs/**"
+      - "**/*.txt"
+
+  1:
+    name: ordinary
+    human_approvals: 1
+    paths:
+      - "src/**"
+      - "tests/**"
+
+  2:
+    name: high-risk
+    human_approvals: 2
+    paths:
+      - "**/auth/**"
+      - "**/payments/**"
+      - "**/migrations/**"
+      - "infra/**"
+      - ".github/workflows/**"
+      - "**/security/**"
+    # Also tier 2 regardless of path:
+    triggers:
+      - irreversible data change
+      - new external dependency
+      - change to permissions, secrets or access control
+      - sets a pattern other teams will copy
+
+rules:
+  agent_approval_counts_as_human: false   # never change this
+  accountable_owner: prompter              # whoever prompted the agent owns the change
+  max_ai_review_rounds: 3                  # then ask the author to rethink the approach
+  security_findings_block_merge: true
