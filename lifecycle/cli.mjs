@@ -7,7 +7,8 @@ import * as L from './core.mjs';
 
 const HELP = `lifecycle <command> [args]
 
-  init                                   create .lifecycle/state.json
+  init [--profile personal|team]         create .lifecycle/state.json (default team)
+  profile personal|team                  switch profile (approvals, review depth, floor)
   status [--json]                        board summary with blockers
   show <id>                              one change in full
   new --title T --owner @human --tier 0|1|2 [--spec S]
@@ -37,7 +38,7 @@ const { positionals, values: o } = parseArgs({
   allowPositionals: true, strict: false,
   options: {
     json: { type: 'boolean' }, fixed: { type: 'boolean' }, clean: { type: 'boolean' },
-    ...Object.fromEntries('title owner tier spec text cmd kind by closed name pct reason should change level actor role tests flags staged rollback dir'
+    ...Object.fromEntries('title owner tier spec text cmd kind by closed name pct reason should change level actor role tests flags staged rollback dir profile'
       .split(' ').map((k) => [k, { type: 'string' }])),
   },
 });
@@ -57,11 +58,17 @@ let write = !['init', 'status', 'show'].includes(cmd);
 
 try {
   switch (cmd) {
-    case 'init': L.save(L.fresh()); print = `Created ${L.FILE}`; break;
+    case 'init': {
+      const name = o.profile || 'team';
+      L.save(L.fresh(name));
+      print = `Created ${L.FILE} (${name} profile: ${L.PROFILES[name].note})`; break;
+    }
+    case 'profile': L.setProfile(s, a1); L.log(s, actor, 'manager', `switched to ${a1} profile`); print = L.PROFILES[a1].note; break;
     case 'status': {
       if (o.json) { print = JSON.stringify({ changes: s.changes.map((x) => ({ ...x, blockers: L.blockers(s, x) })), metrics: L.metrics(s), floor: s.floor }, null, 2); break; }
       const m = L.metrics(s);
-      print = `Floor: ${L.floorBuilt(s) ? 'BUILT' : 'not built (' + Object.entries(s.floor).filter(([, v]) => !v).map(([k]) => k).join(', ') + ' missing)'}\n`;
+      print = `Profile: ${L.profile(s).label}
+Floor: ${L.floorBuilt(s) ? 'BUILT' : 'not built (' + Object.entries(s.floor).filter(([k, v]) => !v && L.profile(s).floor.includes(k)).map(([k]) => k).join(', ') + ' missing)'}\n`;
       print += `Merged ${m.merged}, reverted ${m.reverted} (${(m.revertRate * 100).toFixed(0)}%)\n\n`;
       for (const x of s.changes.filter((x) => !x.reverted && x.stage !== 'shipped'))
         print += `${x.id} [${x.stage}] T${x.tier} ${x.title} (${x.owner})\n${L.blockers(s, x).map((b) => '   - ' + b).join('\n')}\n`;

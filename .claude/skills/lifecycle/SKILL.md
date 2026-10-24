@@ -14,6 +14,19 @@ The board is a local dashboard plus a CLI. **You act through the CLI; humans act
 2. Start the board in the background if it isn't running: `node lifecycle/server.mjs` → tell the user to open http://localhost:4317.
 3. `LC status` shows every open change and exactly what blocks it. Check it before and after every step.
 
+## Personal or team: check the profile first
+`LC status` prints the profile. Match your effort to it, so a solo developer doesn't burn a company's token budget.
+
+| | Personal (`LC init --profile personal`) | Team (`LC init --profile team`) |
+|---|---|---|
+| Who approves | The user is the only human: they approve their own tier 1 and 2 changes in the GUI after reading the evidence | 1 human for tier 1, 2 humans for tier 2 |
+| AI review | Review the diff yourself in one pass. No reviewer subagents, no vote | Spawn 3 reviewer subagents, then a separate pass keeps only findings most of them agree on |
+| Security review | Only on tier 2 changes | Every change |
+| Round limit | 2 | 3 |
+| Floor for tier 0 | Tests + rollback | All four planks |
+
+If the user hasn't picked, ask: "Is this just you, or a team?" Switch later with `LC profile personal|team`.
+
 ## The non-negotiables
 - **Never claim a human approved.** You can't approve as a human; `LC approve` records an agent approval that never counts. When a change needs a human, tell the user: "C3 needs N human approval(s): open it on the board and click Approve."
 - **The prompter owns the change.** `--owner` is the human who asked you for the work. Ask if unsure.
@@ -30,8 +43,8 @@ On a subscription, run one stage per user prompt unless the user says to keep go
 |---|---|---|
 | Spec | Write acceptance criteria a machine can check, get the user's OK | `LC new --title "..." --owner @user --tier 0/1/2 --spec "..."` then `LC advance <id>` |
 | 1 Self-verify | Make the change, then run the tests/build | `LC evidence <id> --cmd "npm test"` → `LC advance <id>` |
-| 2 AI review | Start a round, review the diff yourself (or spawn reviewer subagents: several hunt, then a separate pass keeps only findings most agree on), record findings, fix or close each | `LC round <id>`, `LC finding <id> --kind bug --text "..." --by reviewer-1`, `LC resolve ...`, `LC advance <id>` |
-| 3 Security | Review the diff for exploitable problems only | `LC finding <id> --kind security --text "..."` (if any), `LC security <id>`, `LC advance <id>` |
+| 2 AI review | Start a round, review the diff as the profile says (personal: yourself, one pass; team: reviewer subagents + vote), record findings, fix or close each | `LC round <id>`, `LC finding <id> --kind bug --text "..." --by reviewer-1`, `LC resolve ...`, `LC advance <id>` |
+| 3 Security | Review the diff for exploitable problems only (personal: skip below tier 2, the board won't ask) | `LC finding <id> --kind security --text "..."` (if any), `LC security <id>`, `LC advance <id>` |
 | 4 CI | Run the project's full check | `LC ci <id> --cmd "npm run build && npm test"` → `LC advance <id>` |
 | 5 Approval | Tell the user how many human approvals the tier needs; they click Approve in the GUI | `LC advance <id>` after they approve |
 | 6 Ship | Merge queue re-checks everything; put it behind a flag; ramp | `LC advance`, `LC flag <id> --name x`, `LC advance`, `LC ramp <id> --pct 10/50/100`, `LC advance` |
@@ -41,7 +54,7 @@ On a subscription, run one stage per user prompt unless the user says to keep go
 Use `--role` so the org chart lights up: `worker` (building), `reviewer`, `security`, `coordinator` (advancing, CI), `manager` (ramps, decision map).
 
 ## API mode (optional, costs API tokens)
-If the user wants layers 2 and 3 run automatically on their own API key: `cd lifecycle && npm install` once, then `node lifecycle/autopilot.mjs <id> --base main --test "npm test"`. It runs several reviewers in parallel, a voting pass, and a security reviewer, and posts results to the board. Say what it will cost roughly (a few cents to a few dollars per round depending on diff size and model) before running it. It never approves or merges.
+If the user wants layers 2 and 3 run automatically on their own API key: `cd lifecycle && npm install` once, then `node lifecycle/autopilot.mjs <id> --base main --test "npm test"`. Its depth follows the profile: personal runs one Sonnet reviewer with no vote and security only on tier 2; team runs three Opus reviewers, a voting pass and security on every change. Say what it will cost roughly before running it (personal: usually cents per round; team: several times that, growing with diff size). It never approves or merges.
 
 ## Other jobs
 - **Decision map:** `LC decision D7 --level none|on|in|licensed --owner @x`. Humans can also drag decisions in the GUI. Move a decision toward less attention only with evidence.

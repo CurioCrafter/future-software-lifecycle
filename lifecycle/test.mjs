@@ -20,4 +20,14 @@ c.stage = 'ai_review'; c.rounds = 4;
 assert.ok(blockers(s, c).some((x) => x.includes('rethink')), 'round limit');
 c.findings.push({ kind: 'security', status: 'open' }); c.stage = 'security'; c.securityRan = true;
 assert.ok(blockers(s, c).length, 'open security finding blocks');
+// Personal profile: one human is enough for tier 2, and tier 0/1 skip the security review.
+const p = fresh('personal');
+const d = newChange(p, { title: 'p', tier: 2, owner: '@me', spec: 'x' });
+d.stage = 'approval'; d.approvals.push({ by: '@me', human: true });
+assert.deepEqual(blockers(p, d), [], 'personal: one human approval for tier 2');
+const e = newChange(p, { title: 'q', tier: 1, owner: '@me', spec: 'x' }); e.stage = 'security';
+assert.deepEqual(blockers(p, e), [], 'personal: no security review on tier 1');
+p.floor.tests = p.floor.rollback = true;
+const f = newChange(p, { title: 'r', tier: 0, owner: '@me', spec: 'x' });
+assert.equal(required(p, f), 0, 'personal: tests + rollback is enough floor for tier 0');
 console.log('ok');

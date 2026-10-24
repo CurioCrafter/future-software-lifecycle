@@ -6,7 +6,8 @@
 //   export ANTHROPIC_API_KEY=...           (or `ant auth login`)
 //   node lifecycle/autopilot.mjs C3 [--base main] [--reviewers 3] [--test "npm test"]
 //
-// LIFECYCLE_MODEL picks the model (default claude-opus-5-5; claude-sonnet-5-5 is cheaper).
+// Depth follows the board's profile: personal = 1 Sonnet reviewer, no vote, security on tier 2 only;
+// team = 3 Opus reviewers + a voting pass + security on every change. LIFECYCLE_MODEL / --reviewers override.
 import { parseArgs } from 'node:util';
 import { execFileSync, spawnSync } from 'node:child_process';
 import Anthropic from '@anthropic-ai/sdk';
@@ -14,11 +15,12 @@ import * as L from './core.mjs';
 
 const { positionals: [id], values: o } = parseArgs({
   allowPositionals: true,
-  options: { base: { type: 'string', default: 'main' }, reviewers: { type: 'string', default: '3' }, test: { type: 'string' }, dir: { type: 'string' } },
+  options: { base: { type: 'string', default: 'main' }, reviewers: { type: 'string' }, test: { type: 'string' }, dir: { type: 'string' } },
 });
 if (!id) { console.error('usage: autopilot.mjs <changeId> [--base main] [--reviewers 3] [--test "npm test"]'); process.exit(1); }
 
-const MODEL = process.env.LIFECYCLE_MODEL || 'claude-opus-5-5';
+const P = L.profile(L.load());
+const MODEL = process.env.LIFECYCLE_MODEL || P.review.model;
 const client = new Anthropic();
 
 const FINDINGS = {
@@ -37,7 +39,7 @@ async function ask(system, prompt, schema) {
   const r = await client.beta.messages.create({
     model: MODEL, max_tokens: 16000, system,
     betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
-    output_config: { effort: 'high', format: { type: 'json_schema', schema } },
+    output_config: { effort: P.review.effort, format: { type: 'json_schema', schema } },
     messages: [{ role: 'user', content: prompt }],
   });
   if (r.stop_reason === 'refusal') throw new Error('Model declined: ' + (r.stop_details?.explanation || r.stop_details?.category));
@@ -65,12 +67,18 @@ if (c0.rounds >= s0.config.maxRounds && !c0.rethink) {
 }
 post((s, c) => { c.rounds++; L.log(s, 'autopilot', 'reviewer', `AI review round ${c.rounds} (${o.reviewers} reviewers, ${MODEL})`, id); });
 
-const n = Number(o.reviewers);
+const n = Number(o.reviewers || P.review.reviewers);
+console.log(`${P.label} profile: ${n} reviewer(s), ${P.review.vote && n > 1 ? 'voting pass' : 'no vote'}, ${MODEL}`);
 const hunt = 'You review a code change. Report only real bugs that would cause wrong behaviour, data loss or a failed acceptance criterion. No style nits. Report everything you believe is real; a separate vote filters noise.';
 const raw = (await Promise.all(Array.from({ length: n }, () => ask(hunt, context, FINDINGS)))).flatMap((r) => r.findings);
 console.log(`${raw.length} candidate finding(s) from ${n} reviewers`);
 
-if (raw.length) {
+if (raw.length && !(P.review.vote && n > 1)) {
+  post((s, c) => {
+    for (const f of raw) c.findings.push({ id: 'F' + (c.findings.length + 1), kind: 'bug', text: `${f.file}: ${f.problem}`, by: 'autopilot', status: 'open', round: c.rounds });
+    L.log(s, 'autopilot', 'reviewer', `${raw.length} finding(s), no vote (personal profile)`, id);
+  });
+} else if (raw.length) {
   const list = raw.map((f, i) => `${i}. [${f.file}] ${f.problem}: ${f.why}`).join('\n');
   const judge = 'You verify review findings. For each numbered finding, vote true only if it is a real problem in this diff. Return one boolean per finding, in order.';
   const ballots = await Promise.all(Array.from({ length: n }, () => ask(judge, `${context}\n\nFindings:\n${list}`, VOTES)));
@@ -86,6 +94,10 @@ if (raw.length) {
 }
 
 // Layer 3: security review. Open security findings block merge.
+if (!P.securityTiers.includes(c0.tier)) {
+  console.log(`Security review skipped: ${P.label} profile only runs it on tier ${P.securityTiers.join('/')} changes.`);
+  process.exit(0);
+}
 const secPrompt = 'You are a security reviewer. Report only exploitable security problems introduced by this diff (injection, authz gaps, secrets, unsafe deserialization, SSRF, etc.).';
 const sec = (await ask(secPrompt, context, FINDINGS)).findings;
 post((s, c) => {

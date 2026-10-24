@@ -14,6 +14,7 @@ function view() {
   const s = L.load();
   return {
     ...s, stages: L.STAGES, floorBuilt: L.floorBuilt(s), metrics: L.metrics(s),
+    profile: L.profile(s), profiles: L.PROFILES,
     changes: s.changes.map((c) => ({ ...c, blockers: L.blockers(s, c), required: L.required(s, c) })),
   };
 }
@@ -36,6 +37,7 @@ const HUMAN = {
     if (!L.LEVELS.includes(b.level)) throw new Error('bad level');
     d.level = b.level; L.log(s, b.who || 'human', 'human', `mapped "${d.name}" → ${b.level}`);
   },
+  profile(s, b) { L.setProfile(s, b.name); L.log(s, b.who || 'human', 'human', `switched to ${b.name} profile`); },
   floor(s, b) { s.floor[b.key] = !!b.value; L.log(s, b.who || 'human', 'human', `floor ${b.key}: ${b.value ? 'yes' : 'no'}`); },
 };
 

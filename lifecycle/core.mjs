@@ -50,12 +50,38 @@ const DECISIONS = [
   ['Financial statement sign-off', 'licensed', 'Licensed'],
 ].map(([name, level, area], i) => ({ id: 'D' + (i + 1), name, level, area, owner: '' }));
 
-export function fresh() {
-  return {
-    config: { approvals: { 0: 0, 1: 1, 2: 2 }, maxRounds: 3, trustedAuthors: [] },
+// Personal = one developer on a subscription or a small API budget. Team = a company paying for depth.
+export const PROFILES = {
+  personal: {
+    label: 'Personal', approvals: { 0: 0, 1: 1, 2: 1 }, maxRounds: 2, floor: ['tests', 'rollback'],
+    securityTiers: [2], // security review only on risky changes
+    review: { reviewers: 1, vote: false, model: 'claude-sonnet-5-5', effort: 'medium' },
+    note: 'You are the only human: you approve your own tier 1 and 2 changes after reading the evidence. One reviewer, no vote, security review on tier 2 only.',
+  },
+  team: {
+    label: 'Team', approvals: { 0: 0, 1: 1, 2: 2 }, maxRounds: 3, floor: ['tests', 'flags', 'staged', 'rollback'],
+    securityTiers: [0, 1, 2],
+    review: { reviewers: 3, vote: true, model: 'claude-opus-5-5', effort: 'high' },
+    note: 'Two humans on risky changes. Three reviewers plus a voting pass, security review on every change.',
+  },
+};
+
+export const profile = (s) => PROFILES[s.config.profile] || PROFILES.team;
+
+export function setProfile(s, name) {
+  const p = PROFILES[name];
+  if (!p) throw new Error('profile must be personal or team');
+  Object.assign(s.config, { profile: name, approvals: p.approvals, maxRounds: p.maxRounds });
+}
+
+export function fresh(name = 'team') {
+  const s = {
+    config: { trustedAuthors: [] },
     floor: { tests: false, flags: false, staged: false, rollback: false },
     changes: [], decisions: DECISIONS, incidents: [], log: [], seq: 0,
   };
+  setProfile(s, name);
+  return s;
 }
 
 export function load() {
@@ -75,7 +101,7 @@ export function log(s, actor, role, text, changeId) {
   if (s.log.length > 500) s.log.splice(0, s.log.length - 500);
 }
 
-export const floorBuilt = (s) => Object.values(s.floor).every(Boolean);
+export const floorBuilt = (s) => profile(s).floor.every((k) => s.floor[k]);
 
 export function find(s, id) {
   const c = s.changes.find((c) => c.id === id);
@@ -99,7 +125,8 @@ export function newChange(s, { title, tier = 1, owner, spec = '' }) {
 
 // Human approvals a change needs. Tier 0 only skips humans when the floor is built and the author is trusted.
 export function required(s, c) {
-  if (c.tier === 0 && !(floorBuilt(s) && s.config.trustedAuthors.includes(c.owner))) return 1;
+  const trusted = s.config.profile === 'personal' || s.config.trustedAuthors.includes(c.owner);
+  if (c.tier === 0 && !(floorBuilt(s) && trusted)) return 1;
   return s.config.approvals[c.tier];
 }
 
@@ -123,7 +150,7 @@ export function blockers(s, c) {
       if (c.rounds > s.config.maxRounds && !c.rethink) b.push(`Past ${s.config.maxRounds} rounds: step back and rethink the approach`);
       break;
     case 'security':
-      if (!c.securityRan) b.push('Security review not run');
+      if (!c.securityRan && profile(s).securityTiers.includes(c.tier)) b.push('Security review not run');
       if (open('security').length) b.push(`${open('security').length} open security finding(s) block merge`);
       break;
     case 'ci':

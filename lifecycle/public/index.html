@@ -144,6 +144,41 @@ aside h2 { font-size: 22px; margin-bottom: 10px; }
   .kpis { grid-template-columns: repeat(2, 1fr); } .dmap { grid-template-columns: 1fr 1fr; }
   main { padding: 16px; }
 }
+/* Header controls */
+.ctl { display: flex; gap: 10px; align-items: center; margin-left: auto; }
+.ctl + .live { margin-left: 0; }
+.seg { display: inline-flex; border: 1.5px solid var(--line); border-radius: 99px; padding: 2px; background: var(--card); }
+.seg button { border: 0; background: none; padding: 4px 12px; border-radius: 99px; font-weight: 600; color: var(--muted); transition: background .25s, color .25s; }
+.seg button.on { background: var(--ink); color: var(--paper); }
+.inbox { position: relative; border: 1.5px solid var(--ink); background: var(--card); color: var(--ink); border-radius: 99px; padding: 4px 12px; font-weight: 600; }
+.inbox b { display: inline-grid; place-items: center; min-width: 20px; height: 20px; border-radius: 99px; background: var(--line); font-size: 12px; margin-left: 4px; }
+.inbox.has b { background: var(--red); color: #fff; animation: beat 1.6s infinite; }
+@keyframes beat { 0%, 60%, 100% { transform: scale(1); } 30% { transform: scale(1.25); } }
+.pop { position: absolute; right: 0; top: 38px; width: 360px; background: var(--card); border: 1.5px solid var(--line); border-radius: 12px; box-shadow: 0 12px 40px #0003; padding: 8px; z-index: 6; text-align: left; transform-origin: top right; animation: grow .18s ease-out; }
+@keyframes grow { from { opacity: 0; transform: scale(.92); } }
+.pop .it { padding: 8px; border-radius: 8px; cursor: pointer; font-weight: 400; }
+.pop .it:hover { background: var(--paper); }
+.pop .it small { display: block; color: var(--muted); }
+.pnote { font-size: 12px; color: var(--muted); margin: -6px 0 12px; }
+.find { margin-left: auto; align-self: center; padding: 4px 10px; font-size: 13px; width: 200px; }
+
+/* Motion */
+.kpi.bump b { animation: bump .5s; }
+@keyframes bump { 40% { transform: scale(1.18); color: var(--gold); } }
+.col.hit h3 { animation: hit 1s; }
+@keyframes hit { 30% { color: var(--green); transform: translateX(4px); } }
+.card.shake { animation: shake .45s; }
+@keyframes shake { 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
+.plank.drop { animation: drop .6s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes drop { from { transform: translateY(-40px); opacity: .3; } }
+.toasts { position: fixed; left: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 7; }
+.toast { background: var(--ink); color: var(--paper); padding: 10px 14px; border-radius: 10px; box-shadow: 0 8px 30px #0004; font-size: 13px; max-width: 360px; animation: toast 4.5s forwards; }
+.toast.red { background: var(--red); color: #fff; } .toast.green { background: var(--green); color: #fff; }
+@keyframes toast { 0% { opacity: 0; transform: translateY(16px); } 8%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(8px); } }
+.next { background: var(--blue-bg); border-radius: 10px; padding: 10px; }
+.next code { display: block; font: 12.5px/1.45 var(--mono); white-space: pre-wrap; margin: 6px 0; color: var(--ink); }
+.you { background: var(--gold); color: #1d1d1b; border-radius: 10px; padding: 10px; font-weight: 600; }
+
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
@@ -153,8 +188,10 @@ aside h2 { font-size: 22px; margin-bottom: 10px; }
   <header>
     <h1>Future Software Lifecycle</h1>
     <span class="sub">machines write it, machines check it, people own it</span>
+    <span class="ctl"><span class="seg" id="seg"></span><span style="position:relative"><button class="inbox" id="inbox">Needs you <b>0</b></button><div id="pop"></div></span></span>
     <span class="live" id="live"><i></i><span>connecting…</span></span>
   </header>
+  <div class="pnote" id="pnote"></div>
   <div class="kpis" id="kpis"></div>
   <nav id="tabs"></nav>
   <div id="view"></div>
@@ -162,6 +199,7 @@ aside h2 { font-size: 22px; margin-bottom: 10px; }
 <aside><h2>Live activity</h2><div id="feed"></div></aside>
 </div>
 <div class="drawer" id="drawer"></div>
+<div class="toasts" id="toasts"></div>
 
 <script>
 const $ = (s) => document.querySelector(s);
@@ -172,9 +210,12 @@ const store = { get: (k) => { try { return localStorage.getItem(k); } catch { re
 
 const TABS = { pipeline: 'Pipeline', decisions: 'Decision map', floor: 'The floor', metrics: 'Metrics', org: 'Org' };
 let tab = location.hash.slice(1) in TABS ? location.hash.slice(1) : 'pipeline';
-let S = null, open = null, prev = {}, seenLog = 0;
+let S = null, open = null, prev = {}, lastT = null, popOpen = false, q = '';
+const prevStage = {}, prevK = {}, prevFloor = {};
 
-$('#tabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button data-tab="${k}">${v}</button>`).join('');
+$('#tabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button data-tab="${k}">${v}</button>`).join('') + '<input class="find" id="find" placeholder="Filter: title, owner, C12">';
+$('#find').oninput = (e) => { q = e.target.value.toLowerCase(); render(); };
+document.onkeydown = (e) => { if (e.key === 'Escape') { open = null; popOpen = false; drawer(); inbox(); } };
 $('#tabs').onclick = (e) => { const k = e.target.dataset.tab; if (k) { tab = k; location.hash = k; render(); } };
 
 async function human(body) {
@@ -192,7 +233,76 @@ function kpis() {
     [m.humanApprovals, 'human approvals spent', ''],
     [S.floorBuilt ? 'Built' : Object.values(S.floor).filter(Boolean).length + '/4', 'the floor', S.floorBuilt ? 'good' : 'bad'],
   ];
+  k[4][0] = S.floorBuilt ? 'Built' : S.profile.floor.filter((x) => S.floor[x]).length + '/' + S.profile.floor.length;
   $('#kpis').innerHTML = k.map(([v, l, c]) => `<div class="kpi ${c}"><b>${v}</b><span>${l}</span></div>`).join('');
+  // Count numbers up from their last value and bump the tile, so changes catch the eye.
+  $('#kpis').querySelectorAll('.kpi').forEach((el, i) => {
+    const b = el.querySelector('b'), txt = String(k[i][0]), to = parseFloat(txt), from = prevK[i];
+    if (from !== undefined && from !== txt) {
+      el.classList.add('bump');
+      const f = parseFloat(from), suffix = txt.replace(/^[\d.]+/, '');
+      if (!isNaN(f) && !isNaN(to)) {
+        const t0 = performance.now();
+        const step = (t) => { const p = Math.min(1, (t - t0) / 600); b.textContent = Math.round(f + (to - f) * p) + suffix; if (p < 1) requestAnimationFrame(step); };
+        requestAnimationFrame(step);
+      }
+    }
+    prevK[i] = txt;
+  });
+}
+
+// What only a person can do right now.
+function needsYou() {
+  const out = [];
+  for (const c of S.changes) {
+    if (c.reverted) continue;
+    const b = c.blockers.join(' ');
+    if (c.stage === 'approval' && /human approval/.test(b)) out.push([c, 'Approve', `Needs ${c.required} human approval(s): read the evidence, then approve`]);
+    else if (/rethink/.test(b)) out.push([c, 'Decide', 'Review loop hit the limit: agree a new approach with Claude']);
+    else if (c.stage === 'ramp' && c.halted) out.push([c, 'Decide', 'You halted this ramp: resume or revert']);
+    else if (c.stage === 'ramp' && c.ramp < 100) out.push([c, 'Watch', `Rolling out at ${c.ramp}%: halt if anything looks wrong`]);
+  }
+  return out;
+}
+
+function inbox() {
+  const items = needsYou();
+  $('#inbox').className = 'inbox' + (items.length ? ' has' : '');
+  $('#inbox b').textContent = items.length;
+  $('#pop').innerHTML = popOpen ? `<div class="pop">${items.map(([c, verb, why]) => `<div class="it" data-id="${c.id}"><b>${verb}: ${esc(c.title)}</b> <span class="tier t${c.tier}">T${c.tier}</span><small>${c.id} · ${esc(why)}</small></div>`).join('') || '<div class="it">Nothing needs you. The machines are checking the machines.</div>'}</div>` : '';
+  $('#pop').querySelectorAll('.it[data-id]').forEach((el) => (el.onclick = () => { open = el.dataset.id; popOpen = false; inbox(); drawer(); }));
+}
+$('#inbox').onclick = () => { popOpen = !popOpen; inbox(); };
+
+function profileBar() {
+  $('#seg').innerHTML = Object.entries(S.profiles).map(([k, p]) => `<button class="${S.profile.label === p.label ? 'on' : ''}" data-p="${k}" title="${esc(p.note)}">${p.label}</button>`).join('');
+  $('#seg').querySelectorAll('button').forEach((b) => (b.onclick = () => human({ action: 'profile', name: b.dataset.p })));
+  const rv = S.profile.review;
+  $('#pnote').textContent = `${S.profile.label} profile · AI review: ${rv.reviewers} reviewer${rv.reviewers > 1 ? 's' : ''}${rv.vote ? ' + vote' : ''} on ${rv.model} · security review on tier ${S.profile.securityTiers.join('/')} · ${S.profile.note}`;
+}
+
+function toast(text, cls = '') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + cls; el.textContent = text;
+  $('#toasts').appendChild(el); setTimeout(() => el.remove(), 4600);
+}
+
+const NEXT = {
+  spec: (c) => `Use the lifecycle skill: write the spec and acceptance criteria for ${c.id}, then advance it.`,
+  verify: (c) => `Use the lifecycle skill: build ${c.id} and record real test evidence with the evidence command, then advance it.`,
+  ai_review: (c) => /rethink/.test(c.blockers.join(' ')) ? `${c.id} hit the review round limit. Stop patching findings one by one: summarize what keeps failing, propose a different approach, and record it with rethink.` : `Use the lifecycle skill: run an AI review round on ${c.id}, record findings, fix or close each with a reason, then advance it.`,
+  security: (c) => `Use the lifecycle skill: run the security review on ${c.id}, record any findings, then advance it.`,
+  ci: (c) => `Use the lifecycle skill: run our full CI for ${c.id} and advance it.`,
+  approval: (c) => `Advance ${c.id} through the merge queue.`,
+  merge_queue: (c) => `Advance ${c.id} through the merge queue, then put it behind a feature flag.`,
+  internal: (c) => `Put ${c.id} behind a feature flag and advance it.`,
+  ramp: (c) => `Ramp ${c.id} to the next step (10%, 50%, 100%) and advance it once it reaches 100%.`,
+};
+function copyNext(btn) {
+  const code = btn.previousElementSibling, done = () => setTimeout(() => (btn.textContent = 'Copy prompt'), 1800);
+  const fallback = () => { const rg = document.createRange(); rg.selectNodeContents(code); getSelection().removeAllRanges(); getSelection().addRange(rg); btn.textContent = 'Press Ctrl+C'; done(); };
+  if (!navigator.clipboard) return fallback();
+  navigator.clipboard.writeText(code.textContent).then(() => { btn.textContent = 'Copied ✓'; done(); }, fallback);
 }
 
 function card(c) {
@@ -214,11 +324,12 @@ function shipped(live) {
 
 function pipeline() {
   if (!S.changes.length) return `<div class="empty">No changes yet. Ask Claude: <code>use the lifecycle skill to open a change for …</code><br>or run <code>node lifecycle/demo.mjs</code> to watch a simulated team.</div>`;
-  const live = S.changes.filter((c) => !c.reverted);
+  const hit = (c) => !q || (c.title + ' ' + c.owner + ' ' + c.id).toLowerCase().includes(q);
+  const live = S.changes.filter((c) => !c.reverted && hit(c));
   const gates = ['approval', 'ramp'];
   let h = '<div class="pipe">' + S.stages.map((st) => `<div class="col ${gates.includes(st.id) ? 'gate' : ''}"><div class="layer">${st.layer}</div><h3>${st.label}</h3>
     ${st.id === 'shipped' ? shipped(live) : live.filter((c) => c.stage === st.id).map(card).join('')}</div>`).join('') + '</div>';
-  const rev = S.changes.filter((c) => c.reverted);
+  const rev = S.changes.filter((c) => c.reverted && hit(c));
   if (rev.length) h += `<div class="tray"><h3>Reverted</h3>${rev.map(card).join('')}</div>`;
   return h;
 }
@@ -231,6 +342,8 @@ function drawer() {
     <div class="row"><span class="tier t${c.tier}">TIER ${c.tier}</span><span class="pill">${esc(c.stage)}</span>${c.reverted ? '<span class="pill a">reverted</span>' : ''}</div>
     <h2>${esc(c.title)}</h2>
     <div>Accountable human: <b>${esc(c.owner)}</b></div>
+    ${(() => { const n = needsYou().find(([x]) => x.id === c.id); return n ? `<section class="you">👤 You: ${esc(n[2])}</section>` : ''; })()}
+    ${NEXT[c.stage] && !c.reverted ? `<section class="next"><h4>Next step for Claude</h4><code>${esc(NEXT[c.stage](c))}</code><button class="btn" onclick="copyNext(this)">Copy prompt</button></section>` : ''}
     <section><h4>Blockers</h4>${c.blockers.length ? c.blockers.map((b) => `<div class="blk" style="color:var(--red)">⛔ ${esc(b)}</div>`).join('') : '<div style="color:var(--green)">None</div>'}</section>
     <section><h4>Your actions (human only)</h4>
       <div class="row"><input id="who" placeholder="your name" value="${who}" onchange="store.set('who', this.value)">
@@ -258,10 +371,10 @@ function decisions() {
 const PL = [['tests', 'tests an agent can run'], ['flags', 'feature flags'], ['staged', 'staged releases'], ['rollback', 'fast rollback']];
 function floor() {
   return `<div class="floor"><div class="hose">🚿 the firehose: ${S.changes.length} change(s) from agents</div>
-    <div class="planks">${PL.map(([k, l]) => `<div class="plank ${S.floor[k] ? '' : 'missing'}" data-k="${k}">${l}<br>${S.floor[k] ? '✓' : '+ build it'}</div>`).join('')}</div>
+    <div class="planks">${PL.map(([k, l]) => `<div class="plank ${S.floor[k] ? '' : 'missing'} ${S.floor[k] && prevFloor[k] === false ? 'drop' : ''}" data-k="${k}">${l}<br>${S.floor[k] ? '✓' : S.profile.floor.includes(k) ? '+ build it' : 'optional (' + S.profile.label + ')'}</div>`).join('')}</div>
     <div class="legs"><i></i><i></i><i></i><i></i></div><div class="ground"></div>
     <div class="verdict">${S.floorBuilt ? 'Floor built: you can loosen human review' : 'Not ready to review less'}
-      <small>${S.floorBuilt ? 'Tier 0 changes from trusted authors can now merge with no human approval.' : 'Every change needs at least one human until all four planks are in. Click a plank once it really exists.'}</small></div></div>`;
+      <small>${S.floorBuilt ? `Tier 0 changes${S.config.profile === 'personal' ? '' : ' from trusted authors'} can now merge with no human approval.` : `Every change needs at least one human until the ${S.profile.floor.length} required planks are in. Click a plank once it really exists.`}</small></div></div>`;
 }
 
 function metrics() {
@@ -308,19 +421,38 @@ function pulseOrg(newEvents) {
 function render() {
   if (!S) return;
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
-  // FLIP: remember where each card was, re-render, then slide it from old to new spot.
+  // FLIP: remember where each card and decision chip was, re-render, then slide it from old to new spot.
   const before = {};
-  document.querySelectorAll('.card[data-id]').forEach((el) => (before[el.dataset.id] = el.getBoundingClientRect()));
-  kpis();
+  document.querySelectorAll('[data-id].card, .chip').forEach((el) => (before[el.dataset.id || el.dataset.d] = el.getBoundingClientRect()));
+  const fresh = lastT ? S.log.filter((e) => e.t > lastT) : [];
+  lastT = S.log.at(-1)?.t || lastT;
+  kpis(); profileBar(); inbox();
   $('#view').innerHTML = { pipeline, decisions, floor, metrics, org }[tab]();
-  document.querySelectorAll('.card[data-id]').forEach((el) => {
-    const id = el.dataset.id, c = S.changes.find((x) => x.id === id), b = before[id], a = el.getBoundingClientRect();
+  const slide = (el, b) => {
+    const a = el.getBoundingClientRect();
     if (b && (b.left !== a.left || b.top !== a.top)) el.animate([{ transform: `translate(${b.left - a.left}px, ${b.top - a.top}px)` }, { transform: 'none' }], { duration: 650, easing: 'cubic-bezier(.2,.8,.2,1)' });
+  };
+  document.querySelectorAll('.chip').forEach((el) => slide(el, before[el.dataset.d]));
+  document.querySelectorAll('.card[data-id]').forEach((el) => {
+    const id = el.dataset.id, c = S.changes.find((x) => x.id === id);
+    slide(el, before[id]);
     const sig = JSON.stringify(c);
     if (prev[id] && prev[id] !== sig) el.classList.add('flash');
-    prev[id] = sig;
+    if (prevStage[id] && prevStage[id] !== c.stage) el.closest('.col')?.classList.add('hit');
+    if (fresh.some((e) => e.change === id && e.text.startsWith('blocked'))) el.classList.add('shake');
+    prev[id] = sig; prevStage[id] = c.stage;
     el.onclick = () => { open = id; drawer(); };
   });
+  Object.assign(prevFloor, S.floor);
+  // Pop a toast for the moments a person cares about.
+  for (const e of fresh.slice(-4)) {
+    const c = S.changes.find((x) => x.id === e.change), name = c ? `${c.id} ${c.title}` : '';
+    if (/REVERTED|auto-rollback/.test(e.text)) toast(`↩ ${name} rolled back`, 'red');
+    else if (/HALTED/.test(e.text)) toast(`✋ ${e.actor} halted ${name}`, 'red');
+    else if (e.text === 'advanced to shipped') toast(`🚀 ${name} shipped`, 'green');
+    else if (e.text === 'advanced to approval' && c?.required) toast(`👤 ${name} needs your approval`);
+    else if (/finding/.test(e.text) && e.role === 'security') toast(`🛡 Security finding on ${name}`, 'red');
+  }
   document.querySelectorAll('.plank').forEach((el) => (el.onclick = () => human({ action: 'floor', key: el.dataset.k, value: !S.floor[el.dataset.k] })));
   document.querySelectorAll('.chip').forEach((el) => (el.ondragstart = (e) => e.dataTransfer.setData('text', el.dataset.d)));
   document.querySelectorAll('.lvl').forEach((el) => {
@@ -330,8 +462,6 @@ function render() {
   });
   feed();
   if (open) drawer();
-  const fresh = S.log.slice(seenLog ? seenLog : S.log.length);
-  seenLog = S.log.length;
   if (tab === 'org') pulseOrg(fresh);
 }
 
