@@ -143,7 +143,7 @@ work        [w][w][w][w]     [w][w][w][w]
    - Human **on** the loop (watches, can step in)
    - Human **in** the loop (approves each step)
    - Licensed signature (doctor, engineer, auditor)
-   Risk tiers are an early version of this map.
+   Risk tiers are an early version of this map. Full map and placement flowchart: [decision-map.md](templates/decision-map.md).
 2. **Automate coordination before you cut coordinators.** Coordination is one of the biggest bottlenecks in any company.
 3. **Keep a human on the hook.** The two rules in section 3.
 

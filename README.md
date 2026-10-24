@@ -65,6 +65,7 @@ flowchart TD
 | File | What it's for |
 |---|---|
 | [BLUEPRINT.md](BLUEPRINT.md) | The full playbook: the six verification layers, risk tiers, the two non-negotiable rules, the floor, and the org model. |
+| [templates/decision-map.md](templates/decision-map.md) | Map every decision to no human / on the loop / in the loop / licensed signature. |
 | [templates/readiness-checklist.md](templates/readiness-checklist.md) | Score your team before you loosen review. Start here. |
 | [templates/risk-tiers.yml](templates/risk-tiers.yml) | Copy and edit: which paths/changes need 0, 1 or 2 human approvals. |
 | [templates/AGENTS.md](templates/AGENTS.md) | Rules to drop into your repo for coding agents (verify before claiming done, review loop limit, ownership). |
