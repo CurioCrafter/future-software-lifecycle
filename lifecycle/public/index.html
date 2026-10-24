@@ -179,7 +179,7 @@ $('#tabs').onclick = (e) => { const k = e.target.dataset.tab; if (k) { tab = k; 
 
 async function human(body) {
   body.who = body.who || store.get('who') || '';
-  const r = await fetch('/api/human', { method: 'POST', body: JSON.stringify(body) });
+  const r = await fetch('/api/human', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!r.ok) { const e = await r.json(); const el = $('#herr'); if (el) el.textContent = e.error; else alert(e.error); }
 }
 

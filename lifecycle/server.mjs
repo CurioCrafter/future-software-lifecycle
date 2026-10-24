@@ -49,7 +49,13 @@ function broadcast() {
 }
 fs.watchFile(L.FILE, { interval: 250 }, broadcast);
 
+const HOSTS = [`localhost:${PORT}`, `127.0.0.1:${PORT}`];
+
 http.createServer((req, res) => {
+  // Block DNS rebinding (wrong Host) and other websites posting to us (wrong Origin / no JSON preflight).
+  if (!HOSTS.includes(req.headers.host)) return res.writeHead(403).end();
+  if (req.method === 'POST' && (!HOSTS.some((h) => req.headers.origin === 'http://' + h) || !(req.headers['content-type'] || '').startsWith('application/json')))
+    return res.writeHead(403).end();
   if (req.url === '/api/events') {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
     res.write(`data: ${JSON.stringify(view())}\n\n`);
