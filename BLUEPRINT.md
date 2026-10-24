@@ -17,6 +17,10 @@ The scarce resource is no longer code. It is **human attention**. Everything bel
 
 > Reported result at Anthropic (June to September 2026, self-reported): merged PRs into Claude Code more than doubled while the share of changes that had to be reverted fell by more than 40%.
 
+> Why reading every line stopped being possible: across Anthropic's monorepo, daily merged changes went from about 2,500 in May to over 30,000 by September, more than 20 a minute around the clock.
+
+The video opens with an early agent builder's prediction from the GPT-3 era (around 2022): agents would eventually spend more time talking to each other than to us. This lifecycle is what that looks like for code.
+
 ---
 
 ## 1. The verification stack
@@ -158,8 +162,15 @@ We never made systems reliable by having a person inspect every step. We made th
 - Databases write every change to a log, replay it on a standby, and watch it for anomalies.
 - TCP checksums every packet and resends damaged ones.
 - ECC memory fixes flipped bits on its own.
-- Double-entry bookkeeping (500+ years old) records every transaction twice so the books must balance.
+- Double-entry bookkeeping (500+ years old) records every transaction twice so the books must balance. Proposed triple-entry bookkeeping adds a cryptographically signed receipt both sides can verify.
 - Shannon (1948): you can send a message reliably over a noisy channel if you add the right redundancy.
+
+The video's warning: AI has become an epistemic bubble. People inside it mostly hear from each other, so many miss that engineering and finance solved automated verification long ago.
+
+Machines checking machines is already happening outside code review:
+- Security agents watch corporate networks around the clock, and some triage alerts on their own.
+- Other agents audit code repositories for vulnerabilities nonstop. In 2025 Google's Big Sleep agent found a SQLite flaw that, per Google, only attackers knew about, and helped cut them off before it was used.
+- Audit firms use AI to check every transaction in a general ledger instead of a sample. From AI checking human work to AI checking AI work is a small step.
 
 The next step is the business stack (finance, operations, compliance) following the technical stack. Not a world without checks: a world with more checks than ever, almost all automatic.
 
@@ -169,4 +180,5 @@ The next step is the business stack (finance, operations, compliance) following 
 
 - The numbers are Anthropic grading its own homework; nobody has verified them independently.
 - Anthropic spends far more on tokens than most businesses would.
+- Anthropic's code review product only works with GitHub.
 - Copy the **principles** (layers, tiers, two rules, the floor), not the exact token budget.
